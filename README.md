@@ -53,7 +53,7 @@ conda env create -f environment.yaml
 ### 4) Inference
 
 ```
-python3 sample_condition.py
+python3 diffstategrad_sample_condition.py
 ```
 
 The code is currently configured to do inference on FFHQ. You can download the corresponding models from https://github.com/CompVis/latent-diffusion/tree/main and modify the checkpoint paths for other datasets and models.
