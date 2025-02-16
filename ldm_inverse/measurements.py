@@ -167,6 +167,15 @@ class NonLinearOperator(ABC):
     def project(self, data, measurement, **kwargs):
         return data + measurement - self.forward(data) 
 
+@register_operator(name='high_dynamic_range')
+class HighDynamicRange(NonLinearOperator):
+    def __init__(self, device, scale):
+        self.device = device
+        self.scale = scale
+
+    def forward(self, data, **kwargs):
+        return torch.clip((data * self.scale), -1, 1)
+
 @register_operator(name='phase_retrieval')
 class PhaseRetrievalOperator(NonLinearOperator):
     def __init__(self, oversample, device):
@@ -174,10 +183,11 @@ class PhaseRetrievalOperator(NonLinearOperator):
         self.device = device
         
     def forward(self, data, **kwargs):
+        # rescale like DAPS
+        data = data * 0.5 + 0.5  # [-1, 1] -> [0, 1]
         padded = F.pad(data, (self.pad, self.pad, self.pad, self.pad))
         amplitude = fft2_m(padded).abs()
         return amplitude
-
 
 @register_operator(name='nonlinear_blur')
 class NonlinearBlurOperator(NonLinearOperator):
