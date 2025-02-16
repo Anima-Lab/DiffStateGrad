@@ -1,4 +1,4 @@
-# Solving Inverse Problems with Latent Diffusion Models via Hard Data Consistency (ICLR 2024)
+# Diffusion-State Guided Projected Gradient for Inverse Problems (ICLR 2025)
 
 ![example](https://github.com/soominkwon/resample/blob/main/figures/resample_ex.png)
 
