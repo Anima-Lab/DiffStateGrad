@@ -88,12 +88,11 @@ If you find our work interesting, please consider citing
 
 ```
 @inproceedings{
-song2024solving,
-title={Solving Inverse Problems with Latent Diffusion Models via Hard Data Consistency},
-author={Bowen Song and Soo Min Kwon and Zecheng Zhang and Xinyu Hu and Qing Qu and Liyue Shen},
-booktitle={The Twelfth International Conference on Learning Representations},
-year={2024},
-url={https://openreview.net/forum?id=j8hdRqOUhN}
+    zirvi2025diffusion,
+    title={Diffusion State-Guided Projected Gradient for Inverse Problems},
+    author={Rayhan Zirvi and Bahareh Tolooshams and Anima Anandkumar},
+    booktitle={The Thirteenth International Conference on Learning Representations},
+    year={2025}
 }
 ```
 
