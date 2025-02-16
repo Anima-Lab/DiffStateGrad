@@ -11,7 +11,7 @@ In this work, we propose ReSample, an algorithm that can solve general inverse p
 ### 1) Clone the repository
 
 ```
-git clone https://github.com/soominkwon/resample.git
+git clone https://github.com/rzirvi1665/DiffStateGrad.git
 
 cd resample
 ```
