@@ -5,11 +5,88 @@ import numpy as np
 from tqdm import tqdm
 from functools import partial
 from scripts.utils import *
+import time
 
 from ldm.modules.diffusionmodules.util import make_ddim_sampling_parameters, make_ddim_timesteps, noise_like, \
     extract_into_tensor
 from skimage.metrics import peak_signal_noise_ratio as psnr
 from scripts.utils import clear_color
+
+# DiffStateGrad helper method
+def compute_rank_for_explained_variance(singular_values, explained_variance_cutoff):
+    """
+   Computes average rank needed across channels to explain target variance percentage.
+   
+   Args:
+       singular_values: List of arrays containing singular values per channel
+       explained_variance_cutoff: Target explained variance ratio (0-1)
+   
+   Returns:
+       int: Average rank needed across RGB channels
+   """
+    total_rank = 0
+    for channel_singular_values in singular_values:
+        squared_singular_values = channel_singular_values ** 2
+        cumulative_variance = np.cumsum(squared_singular_values) / np.sum(squared_singular_values)
+        rank = np.searchsorted(cumulative_variance, explained_variance_cutoff) + 1
+        total_rank += rank
+    return int(total_rank / 3)
+
+def compute_svd_and_adaptive_rank(z_t, var_cutoff):
+    """
+    Compute SVD and adaptive rank for the input tensor.
+    
+    Args:
+        z_t: Input tensor (current image representation at time step t)
+        var_cutoff: Variance cutoff for rank adaptation
+        
+    Returns:
+        tuple: (U, s, Vh, adaptive_rank) where U, s, Vh are SVD components
+               and adaptive_rank is the computed rank
+    """
+    # Compute SVD of current image representation
+    U, s, Vh = torch.linalg.svd(z_t[0], full_matrices=False)
+    
+    # Compute adaptive rank
+    s_numpy = s.detach().cpu().numpy()
+
+    adaptive_rank = compute_rank_for_explained_variance([s_numpy], var_cutoff)
+    
+    return U, s, Vh, adaptive_rank
+
+def apply_diffstategrad(norm_grad, iteration_count, period, U=None, s=None, Vh=None, adaptive_rank=None):
+    """
+    Compute projected gradient using DiffStateGrad algorithm.
+    
+    Args:
+        norm_grad: Normalized gradient
+        iteration_count: Current iteration count
+        period: Period of SVD projection
+        U: Left singular vectors from SVD
+        s: Singular values from SVD
+        Vh: Right singular vectors from SVD
+        adaptive_rank: Computed adaptive rank
+        
+    Returns:
+        torch.Tensor: Projected gradient if period condition is met, otherwise original gradient
+    """
+    if period != 0 and iteration_count % period == 0:
+        if any(param is None for param in [U, s, Vh, adaptive_rank]):
+            raise ValueError("SVD components and adaptive_rank must be provided when iteration_count % period == 0")
+        
+        # Project gradient
+        A = U[:, :, :adaptive_rank]
+        B = Vh[:, :adaptive_rank, :]
+        
+        low_rank_grad = torch.matmul(A.permute(0, 2, 1), norm_grad[0]) @ B.permute(0, 2, 1)
+        projected_grad = torch.matmul(A, low_rank_grad) @ B
+        
+        # Reshape projected gradient to match original shape
+        projected_grad = projected_grad.float().unsqueeze(0)  # Add batch dimension back
+        
+        return projected_grad
+    
+    return norm_grad
 
 class DDIMSampler(object):
     def __init__(self, model, schedule="linear", **kwargs):
@@ -140,6 +217,10 @@ class DDIMSampler(object):
                log_every_t=100,
                unconditional_guidance_scale=1.,
                unconditional_conditioning=None,
+               pixel_lr=None,
+               latent_lr=None,
+               var_cutoff=None,
+               period=None,
                # this has to come in the same format as the conditioning, # e.g. as encoded tokens, ...
                **kwargs
                ):
@@ -177,7 +258,8 @@ class DDIMSampler(object):
                                                         x_T=x_T,
                                                         log_every_t=log_every_t,
                                                         unconditional_guidance_scale=unconditional_guidance_scale,
-                                                        unconditional_conditioning=unconditional_conditioning,
+                                                        unconditional_conditioning=unconditional_conditioning, pixel_lr=pixel_lr,
+                                                        latent_lr=latent_lr, var_cutoff=var_cutoff, period = period
                                                         )
             
         else:
@@ -191,7 +273,8 @@ class DDIMSampler(object):
                      callback=None, timesteps=None, quantize_denoised=False,
                      mask=None, x0=None, img_callback=None, log_every_t=100,
                      temperature=1., noise_dropout=0., score_corrector=None, corrector_kwargs=None,
-                     unconditional_guidance_scale=1., unconditional_conditioning=None,):
+                     unconditional_guidance_scale=1., unconditional_conditioning=None, pixel_lr=None, latent_lr=None,
+                     var_cutoff=None, period=None):
         """
         DDIM-based sampling function for ReSample.
 
@@ -251,6 +334,8 @@ class DDIMSampler(object):
                                       corrector_kwargs=corrector_kwargs,
                                       unconditional_guidance_scale=unconditional_guidance_scale,
                                       unconditional_conditioning=unconditional_conditioning)
+            
+            z_before = img.detach()
 
             img, _ = measurement_cond_fn(x_t=out, # x_t is x_{t-1}
                                             measurement=measurement,
@@ -270,7 +355,7 @@ class DDIMSampler(object):
 
                 # Performing only every 10 steps (or so)
                 # TODO: also make this not hard-coded
-                if index % 10 == 0 :  
+                if index % 10 == 0:  
                     for k in range(i, min(i+inter_timesteps, len(list( reversed(timesteps) ))-1)):
                         step_ = list( reversed(timesteps))[k+1]
                         ts_ = torch.full((b,), step_, device=device, dtype=torch.long)
@@ -292,14 +377,14 @@ class DDIMSampler(object):
 
                     # Pixel-based optimization for second stage
                     if index >= index_split: 
-                        
                         # Enforcing consistency via pixel-based optimization
                         pseudo_x0 = pseudo_x0.detach() 
                         pseudo_x0_pixel = self.model.decode_first_stage(pseudo_x0) # Get \hat{x}_0 into pixel space
 
                         opt_var = self.pixel_optimization(measurement=measurement, 
                                                           x_prime=pseudo_x0_pixel,
-                                                          operator_fn=operator_fn)
+                                                          operator_fn=operator_fn, lr=pixel_lr, var_cutoff=var_cutoff,
+                                                          x_prev=self.model.decode_first_stage(img.detach().clone()), period=period)
                         
                         opt_var = self.model.encode_first_stage(opt_var) # Going back into latent space
 
@@ -308,11 +393,11 @@ class DDIMSampler(object):
 
                     # Latent-based optimization for third stage
                     elif index < index_split: # Needs to (possibly) be tuned
-
                         # Enforcing consistency via latent space optimization
                         pseudo_x0, _ = self.latent_optimization(measurement=measurement,
                                                              z_init=pseudo_x0.detach(),
-                                                             operator_fn=operator_fn)
+                                                             operator_fn=operator_fn, lr=latent_lr, var_cutoff=var_cutoff,
+                                                             z_prev=img.detach(), period=period)
 
 
                         sigma = 40 * (1-a_prev)/(1 - a_t) * (1 - a_t / a_prev) # Change the 40 value for each task
@@ -324,17 +409,18 @@ class DDIMSampler(object):
             if img_callback: img_callback(pred_x0, i)
             if index % log_every_t == 0 or index == total_steps - 1:
                 intermediates['x_inter'].append(img)
-                intermediates['pred_x0'].append(pred_x0)       
-                
+                intermediates['pred_x0'].append(pred_x0)      
+        
         psuedo_x0, _ = self.latent_optimization(measurement=measurement,
                                                              z_init=img.detach(),
-                                                             operator_fn=operator_fn)
+                                                             operator_fn=operator_fn, lr=latent_lr, var_cutoff=var_cutoff,
+                                                             z_prev=img.detach(), period=period)
         img = psuedo_x0.detach().clone()
             
         return img, intermediates
 
 
-    def pixel_optimization(self, measurement, x_prime, operator_fn, eps=1e-3, max_iters=2000):
+    def pixel_optimization(self, measurement, x_prime, operator_fn, eps=1e-3, max_iters=2000, lr=None, var_cutoff=None, x_prev=None, period=None):
         """
         Function to compute argmin_x ||y - A(x)||_2^2
 
@@ -348,19 +434,32 @@ class DDIMSampler(object):
 
         loss = torch.nn.MSELoss() # MSE loss
 
+        if lr is None:
+            lr_val = 1e-2
+        else:
+            lr_val = lr
+
         opt_var = x_prime.detach().clone()
         opt_var = opt_var.requires_grad_()
-        optimizer = torch.optim.AdamW([opt_var], lr=1e-2) # Initializing optimizer
+        
+        optimizer = torch.optim.AdamW([opt_var], lr=lr_val) # Initializing optimizer
         measurement = measurement.detach() # Need to detach for weird PyTorch reasons
+
+        # Calculate SVD and adaptive rank in prep for DiffStateGrad
+        U, s, Vh, adaptive_rank = compute_svd_and_adaptive_rank(x_prev, var_cutoff)
 
         # Training loop
 
-        for _ in range(max_iters):
+        for itr in range(max_iters):
             optimizer.zero_grad()
             
             measurement_loss = loss(measurement, operator_fn( opt_var ) ) 
             
             measurement_loss.backward() # Take GD step
+
+            opt_var.grad = apply_diffstategrad(opt_var.grad, itr, period, 
+            U, s, Vh, adaptive_rank)
+
             optimizer.step()
 
             # Convergence criteria
@@ -370,7 +469,7 @@ class DDIMSampler(object):
         return opt_var
 
 
-    def latent_optimization(self, measurement, z_init, operator_fn, eps=1e-3, max_iters=500, lr=None):
+    def latent_optimization(self, measurement, z_init, operator_fn, eps=1e-3, max_iters=500, lr=None, var_cutoff=None, z_prev=None, period=None):
 
         """
         Function to compute argmin_z ||y - A( D(z) )||_2^2
@@ -393,7 +492,76 @@ class DDIMSampler(object):
         if lr is None:
             lr_val = 5e-3
         else:
-            lr_val = lr.item()
+            lr_val = lr
+
+        loss = torch.nn.MSELoss() # MSE loss
+        z_init_orig = z_init
+        optimizer = torch.optim.AdamW([z_init], lr=lr_val) # Initializing optimizer ###change the learning rate
+        measurement = measurement.detach() # Need to detach for weird PyTorch reasons
+
+        # Calculate SVD and adaptive rank in prep for DiffStateGrad
+        U, s, Vh, adaptive_rank = compute_svd_and_adaptive_rank(z_prev, var_cutoff)
+
+        # Training loop
+        init_loss = 0
+        losses = []
+        
+        for itr in range(max_iters):
+            optimizer.zero_grad()
+            output = loss(measurement, operator_fn( self.model.differentiable_decode_first_stage( z_init ) ))          
+
+            if itr == 0:
+                init_loss = output.detach().clone()
+            
+            output.backward() # Take GD step
+
+            z_init.grad = apply_diffstategrad(z_init.grad, itr, period, 
+            U, s, Vh, adaptive_rank)
+
+            optimizer.step()
+            cur_loss = output.detach().cpu().numpy() 
+            
+            # Convergence criteria
+
+            if itr < 200: # may need tuning for early stopping
+                losses.append(cur_loss)
+            else:
+                losses.append(cur_loss)
+                if losses[0] < cur_loss:
+                    break
+                else:
+                    losses.pop(0)
+                    
+            if cur_loss < eps**2:  # needs tuning according to noise level for early stopping
+                break
+
+
+        return z_init, init_loss
+
+    def latent_optimization_end(self, measurement, z_init, operator_fn, eps=1e-3, max_iters=500, lr=None, var_cutoff=None, z_prev=None, change_freq=None):
+
+        """
+        Function to compute argmin_z ||y - A( D(z) )||_2^2
+
+        Arguments:
+            measurement:           Measurement vector y in y=Ax+n.
+            z_init:                Starting point for optimization
+            operator_fn:           Operator to perform forward operation A(.)
+            eps:                   Tolerance error
+            max_iters:             Maximum number of GD iterations
+        
+        Optimal parameters seem to be at around 500 steps, 200 steps for inpainting.
+
+        """
+
+        # Base case
+        if not z_init.requires_grad:
+            z_init = z_init.requires_grad_()
+
+        if lr is None:
+            lr_val = 5e-3
+        else:
+            lr_val = lr
 
         loss = torch.nn.MSELoss() # MSE loss
         optimizer = torch.optim.AdamW([z_init], lr=lr_val) # Initializing optimizer ###change the learning rate
@@ -409,7 +577,7 @@ class DDIMSampler(object):
 
             if itr == 0:
                 init_loss = output.detach().clone()
-                
+            
             output.backward() # Take GD step
             optimizer.step()
             cur_loss = output.detach().cpu().numpy() 
@@ -429,7 +597,7 @@ class DDIMSampler(object):
                 break
 
 
-        return z_init, init_loss       
+        return z_init, init_loss            
 
 
     def stochastic_resample(self, pseudo_x0, x_t, a_t, sigma):
