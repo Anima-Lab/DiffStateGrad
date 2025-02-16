@@ -68,10 +68,13 @@ The code is currently configured to do inference on FFHQ. You can download the c
 - configs/tasks/super_resolution_config.yaml
 - configs/tasks/gaussian_deblur_config.yaml
 - configs/tasks/motion_deblur_config.yaml
-- configs/tasks/inpainting_config.yaml
+- configs/tasks/box_inpainting_config.yaml
+- configs/tasks/rand_inpainting_config.yaml
 
 # Non-linear inverse problems
 - configs/tasks/nonlinear_deblur_config.yaml
+- configs/tasks/phase_retrieval_config.yaml
+- configs/tasks/hdr_config.yaml
 ```
 
 <br />
