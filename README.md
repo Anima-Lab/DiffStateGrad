@@ -5,30 +5,15 @@ TODO (add image from paper):
 
 ## Abstract
 
-TODO (Edit this): In this work, we propose ReSample, an algorithm that can solve general inverse problems with pre-trained latent diffusion models. Our algorithm incorporates data consistency by solving an optimization problem during the reverse sampling process, a concept that we term as hard data consistency. Upon solving this optimization problem, we propose a novel resampling scheme to map the measurement-consistent sample back onto the noisy data manifold.
+In this work, we propose DiffStateGrad, a novel approach that enhances diffusion-based inverse problem solvers by projecting measurement guidance gradients onto a data-driven low-rank subspace. Our algorithm addresses the challenge of maintaining manifold consistency by performing singular value decomposition on intermediate diffusion states to define a projection matrix that captures local data statistics. This projection ensures that measurement guidance remains aligned with the learned data manifold while filtering out artifact-inducing components, leading to improved robustness and performance across various inverse problems. In this repository, we demonstrate the effectiveness of DiffStateGrad by applying it to ReSample's framework.
+
+## Overview
+
+In this work, we enhance ReSample by incorporating our Diffusion State-Guided Projected Gradient (DiffStateGrad) method, which addresses the fundamental challenge of maintaining the diffusion process on the data manifold while solving inverse problems.
 
 # DiffStateGrad-ReSample
 
 This repository contains an implementation of ReSample enhanced with DiffStateGrad, combining two powerful approaches for solving inverse problems with pre-trained latent diffusion models.
-
-## Overview
-
-ReSample is an algorithm that can solve general inverse problems with pre-trained latent diffusion models. The algorithm incorporates data consistency by solving an optimization problem during the reverse sampling process, a concept termed as hard data consistency. Upon solving this optimization problem, ReSample employs a novel resampling scheme to map the measurement-consistent sample back onto the noisy data manifold.
-
-In this work, we enhance ReSample by incorporating our Diffusion State-Guided Projected Gradient (DiffStateGrad) method, which addresses the fundamental challenge of maintaining the diffusion process on the data manifold while solving inverse problems.
-
-## Our Contributions
-
-We propose DiffStateGrad to improve upon ReSample's capabilities by:
-
-1. Introducing a gradient-based measurement guidance approach that uses the measurement as guidance to move the intermediate diffusion state xt toward high-probability regions of the posterior.
-
-2. Implementing a novel projection of the measurement guidance gradient onto a low-rank subspace that captures the data statistics of the learned prior.
-
-3. Defining a projection step that preserves the measurement gradient on the tangent space of the state manifold, achieved through:
-   - Performing singular value decomposition (SVD) on the diffusion state
-   - Using the r highest contributing singular vectors as our projection matrix
-   - Projecting the measurement gradient onto this subspace to remove directions orthogonal to the local manifold structure
 
 ## Implementation
 
