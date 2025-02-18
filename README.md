@@ -1,6 +1,5 @@
 # Diffusion-State Guided Projected Gradient for Inverse Problems (ICLR 2025)
 
-TODO (add image from paper):
 ![example](https://github.com/rzirvi1665/DiffStateGrad/blob/main/figures/manifold_diffstategrad.png)
 
 ## Abstract
