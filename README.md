@@ -18,7 +18,7 @@ This repository provides a modified version of the ReSample codebase that incorp
 ```
 git clone https://github.com/rzirvi1665/DiffStateGrad.git
 
-cd resample
+cd DiffStateGrad
 ```
 
 <br />
