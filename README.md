@@ -13,8 +13,6 @@ This repository provides a modified version of the ReSample codebase that incorp
 
 Our main contributions can be found in `diffstategrad_sample_condition.py` and `ldm/models/diffusion/diffstategrad_ddim.py`. The core utilities of DiffStateGrad are implemented in `diffstategrad_utils.py`.
 
-We also provide a file of explicit functions 
-
 ## Getting Started
 
 ### 1) Clone the repository
