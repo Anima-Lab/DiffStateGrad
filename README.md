@@ -14,7 +14,9 @@ In this work, we propose DiffStateGrad, a novel approach that enhances diffusion
 
 This repository provides a modified version of the ReSample codebase that incorporates our DiffStateGrad method. The implementation maintains the core functionality of ReSample while adding our enhancements for improved performance and stability.
 
-Our main contributions can be found in `diffstategrad_sample_condition.py` and `ldm/models/diffusion/diffstategrad_ddim.py`. The core utilities of DiffStateGrad are implemented in `diffstategrad_utils.py`.
+Our main contributions can be found in `diffstategrad_sample_condition.py` and `ldm/models/diffusion/diffstategrad_ddim.py`. 
+
+The core utilities of DiffStateGrad are implemented in `diffstategrad_utils.py`. These methods can be applied to other works as a plug-in-play.
 
 ## Getting Started
 
@@ -101,4 +103,10 @@ If you find our work interesting, please consider citing
     year={2025}
 }
 ```
+
+## MIT License
+
+All rights reserved unless otherwise stated by applicable licenses.
+If this code includes third-party components, they remain under their original licenses and attributions.
+
 
