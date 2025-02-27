@@ -217,7 +217,7 @@ if measure_config['operator']['name'] == 'inpainting':
 file_name = f"{args.image_id:05d}.png"
 
 # Construct the full file path
-file_path = os.path.join("ffhq256", file_name)
+file_path = os.path.join("samples", file_name)
 
 # Check if the file exists
 if not os.path.exists(file_path):
