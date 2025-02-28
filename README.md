@@ -16,7 +16,35 @@ This repository provides a modified version of the ReSample codebase that incorp
 
 Our main contributions can be found in `diffstategrad_sample_condition.py` and `ldm/models/diffusion/diffstategrad_ddim.py`. 
 
-The core utilities of DiffStateGrad are implemented in `diffstategrad_utils.py`. These methods can be applied to other works as a plug-in-play.
+### DiffStateGrad Helper Methods
+
+The core utilities of DiffStateGrad are implemented in `diffstategrad_utils.py`. These utilities can be applied to other works as a plug-and-play module. The implementation includes three main functions:
+
+1. `compute_rank_for_explained_variance`: Determines the optimal rank needed to explain a target variance percentage across channels
+2. `compute_svd_and_adaptive_rank`: Performs SVD decomposition and computes adaptive rank based on variance cutoff
+3. `apply_diffstategrad`: Applies the projected gradient using our DiffStateGrad algorithm based on iteration period
+
+### Example Usage
+
+```python
+from diffstategrad_utils import compute_svd_and_adaptive_rank, apply_diffstategrad
+
+# During optimization:
+if iteration_count % period == 0:
+    # Compute SVD and adaptive rank when needed
+    U, s, Vh, adaptive_rank = compute_svd_and_adaptive_rank(z_t, var_cutoff=0.9)
+
+# Apply DiffStateGrad to the normalized gradient
+projected_grad = apply_diffstategrad(
+    norm_grad=normalized_gradient,
+    iteration_count=iteration_count,
+    period=period,
+    U=U, s=s, Vh=Vh, 
+    adaptive_rank=adaptive_rank
+)
+```
+
+For complete implementation details, please refer to [`diffstategrad_utils.py`](link/to/file) in our repository.
 
 ## Getting Started
 
