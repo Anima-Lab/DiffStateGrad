@@ -44,7 +44,7 @@ projected_grad = apply_diffstategrad(
 )
 ```
 
-For complete implementation details, please refer to [`diffstategrad_utils.py`](link/to/file) in our repository.
+For complete implementation details, please refer to [`diffstategrad_utils.py`](https://github.com/rzirvi1665/DiffStateGrad/blob/main/diffstategrad_utils.py) in our repository.
 
 ## Getting Started
 
