@@ -21,8 +21,8 @@ Our main contributions can be found in `diffstategrad_sample_condition.py` and `
 The core utilities of DiffStateGrad are implemented in `diffstategrad_utils.py`. These utilities can be applied to other works as a plug-and-play module. The implementation includes three main functions:
 
 1. `compute_rank_for_explained_variance`: Determines the rank needed to explain a target variance percentage across channels
-2. `compute_svd_and_adaptive_rank`: Performs SVD on gradient and computes adaptive rank based on variance cutoff
-3. `apply_diffstategrad`: Computes the projected gradient using our DiffStateGrad algorithm based on iteration period
+2. `compute_svd_and_adaptive_rank`: Performs SVD on diffusion state and computes adaptive rank based on variance cutoff
+3. `apply_diffstategrad`: Computes the projected gradient using our DiffStateGrad algorithm
 
 ### Example Usage
 
@@ -42,6 +42,9 @@ projected_grad = apply_diffstategrad(
     U=U, s=s, Vh=Vh, 
     adaptive_rank=adaptive_rank
 )
+
+# Update diffusion state with projected gradient
+z_t = z_t - eta * projected_grad
 ```
 
 For complete implementation details, please refer to [`diffstategrad_utils.py`](https://github.com/rzirvi1665/DiffStateGrad/blob/main/diffstategrad_utils.py) in our repository.
